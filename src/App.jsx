@@ -1,3 +1,4 @@
+import axios from "axios";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 
 // Dummy HTML template (simulating backend response)
@@ -30,12 +31,138 @@ const App = () => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [resizeHandle, setResizeHandle] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [randomImages] = useState([
-    "https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1493612276216-ee3925520721?fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1496309732348-3627b118c9f4?fit=crop&w=800&q=80",
-  ]);
+  const [images, setImages] = useState([]);
+  const [library, setLibrary] = useState([]);
+  const [marketingVisualAssets, setMarketingVisualAssets] = useState([]);
+  const [persuasiveAdCopywriting, setPersuasiveAdCopywriting] = useState([]);
+  const [activeSection, setActiveSection] = useState("All");
+  // const [randomImages] = useState([
+  //   "https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?fit=crop&w=800&q=80",
+  //   "https://images.unsplash.com/photo-1493612276216-ee3925520721?fit=crop&w=800&q=80",
+  //   "https://images.unsplash.com/photo-1506744038136-46273834b3fb?fit=crop&w=800&q=80",
+  //   "https://images.unsplash.com/photo-1496309732348-3627b118c9f4?fit=crop&w=800&q=80",
+  // ]);
+
+  useEffect(() => {
+    const fetchLibraryAssets = async () => {
+      try {
+        const response = await axios.get("http://localhost:8000/api/library", {
+          headers: {
+            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUzNTMxMDAyLCJpYXQiOjE3NTM0NDQ2MDIsImp0aSI6IjRhYzM5YThjY2E1MDQyODI5ZGRiMDEzOThlYzk0MTJmIiwidXNlcl9pZCI6MX0.hjx2PIywUmut16oZkEetj9C9I1Zpbu9d4ScyLLmRN5Q`,
+          },
+        });
+
+        const data = response.data.data;
+
+        console.log("----------------------", data);
+
+        setLibrary(data["library"]?.results || []);
+        setMarketingVisualAssets(
+          data["marketing-visual-assets"]?.results || []
+        );
+        setPersuasiveAdCopywriting(
+          data["persuasive-ad-copywriting"]?.results || []
+        );
+      } catch (error) {
+        console.error("❌ Failed to fetch library assets:", error);
+      }
+    };
+
+    fetchLibraryAssets();
+  }, []);
+
+  const buttonLabels = [
+    "All",
+    "Library",
+    "Marketing Visual Assets",
+    "Persuasive Ad Copywriting",
+    "High Impact Product Photography",
+    "Videos",
+    "Prompts",
+  ];
+
+  const renderContent = () => {
+    let items = [];
+
+    switch (activeSection) {
+      case "Marketing Visual Assets":
+        items = marketingVisualAssets;
+        break;
+      case "Persuasive Ad Copywriting":
+        items = persuasiveAdCopywriting;
+        break;
+      case "Library":
+        items = library;
+        break;
+      case "All":
+        items = [...library, ...marketingVisualAssets]; // or include others if needed
+        break;
+      default:
+        return <p className="px-4 text-sm text-gray-500">Select a section.</p>;
+    }
+
+    if (activeSection === "Persuasive Ad Copywriting") {
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          {items.map((item, idx) => (
+            <div
+              key={idx}
+              className="border border-gray-500 rounded-xl p-4 shadow-sm"
+            >
+              <h3 className="text-lg font-semibold text-gray-600">
+                {item.heading}
+              </h3>
+              <p className="text-gray-600 mt-2">{item.body}</p>
+              <p className="mt-4 inline-block text-white rounded hover:bg-blue-700 transition">
+                {item.cta}
+              </p>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+          gap: 16,
+          width: "100%",
+        }}
+      >
+        {items.map((img, idx) => {
+          const src = `http://localhost:8000${
+            img.generated_image || img.image
+          }`;
+          return (
+            <div
+              key={img.id || idx}
+              onClick={() => handleImageSelect(img)}
+              style={{
+                cursor: "pointer",
+                borderRadius: 8,
+                overflow: "hidden",
+                border: "2px solid transparent",
+                transition: "0.3s",
+              }}
+            >
+              <img
+                src={src}
+                alt={`img-${idx}`}
+                style={{
+                  width: "100%",
+                  height: 140,
+                  objectFit: "cover",
+                  display: "block",
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   // History management for undo/redo
   const [history, setHistory] = useState([]);
@@ -580,7 +707,29 @@ const App = () => {
     [elements, saveToHistory]
   );
 
+  // const handleImageSelect = (img) => {
+  //   const image = new Image();
+  //   image.crossOrigin = "anonymous";
+  //   image.onload = () => {
+  //     setBackgroundImage(image); // ← You need to have this function in your component
+  //     saveToHistory(elements, image); // ← You need to have this too if using
+  //     setShowModal(false);
+  //   };
+  //   image.src = `http://localhost:8000${img.generated_image || img.image}`;
+  // };
+
   // Get resize handle at position
+
+  const handleImageSelect = (img) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      setBackgroundImage(image); // <-- This function must exist in your component
+      setShowModal(false);
+    };
+    image.src = `http://localhost:8000${img.generated_image || img.image}`;
+  };
+
   const getResizeHandleAt = useCallback(
     (x, y, element) => {
       console.log("🎯 getResizeHandleAt called");
@@ -1656,6 +1805,7 @@ const App = () => {
               justifyContent: "center",
               alignItems: "center",
               zIndex: 9999,
+              padding: 20, // adds margin from edges
             }}
             onClick={() => setShowModal(false)}
           >
@@ -1664,45 +1814,54 @@ const App = () => {
                 background: "#1e1e2f",
                 padding: 20,
                 borderRadius: 12,
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-                maxWidth: 820,
+                width: "100%",
+                maxWidth: 1000,
+                maxHeight: "90vh", // limits height
+                overflowY: "auto", // makes content scrollable
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {randomImages.map((img, index) => (
-                <img
-                  key={index}
-                  src={img}
-                  alt={`bg-${index}`}
-                  onClick={() => {
-                    const image = new Image();
-                    image.crossOrigin = "anonymous";
-                    image.onload = () => {
-                      setBackgroundImage(image);
-                      saveToHistory(elements, image);
-                    };
-                    image.src = img;
-                    setShowModal(false);
-                  }}
-                  style={{
-                    width: 200,
-                    height: 125,
-                    objectFit: "cover",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    border: "2px solid transparent",
-                    transition: "0.3s",
-                  }}
-                  onMouseOver={(e) =>
-                    (e.currentTarget.style.border = "2px solid #ff4757")
-                  }
-                  onMouseOut={(e) =>
-                    (e.currentTarget.style.border = "2px solid transparent")
-                  }
-                />
-              ))}
+              {/* Buttons */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 16,
+                }}
+              >
+                {buttonLabels.map((label) => (
+                  <button
+                    key={label}
+                    onClick={() => setActiveSection(label)}
+                    style={{
+                      padding: "6px 12px",
+                      background:
+                        activeSection === label
+                          ? "#ff4757"
+                          : "rgba(255, 255, 255, 0.1)",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Content */}
+              <div
+                style={{
+                  borderTop: "1px solid rgba(255,255,255,0.1)",
+                  paddingTop: 16,
+                }}
+              >
+                {renderContent()}
+              </div>
             </div>
           </div>
         )}
