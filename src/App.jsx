@@ -707,6 +707,77 @@ const App = () => {
     [elements, saveToHistory]
   );
 
+  // Add this new function to generate HTML template
+  const generateHtmlTemplate = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return "";
+
+    // Create a container div with the canvas dimensions
+    let html = `<div id="ad-template" style="width: ${canvas.width}px; height: ${canvas.height}px; position: relative; overflow: hidden; background-color: #2c2c54;">`;
+
+    // Add background image if exists
+    if (backgroundImage) {
+      html += `<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: url('${backgroundImage.src}'); background-size: cover; background-position: center;"></div>`;
+    }
+
+    // Add all elements
+    elements.forEach((element) => {
+      if (element.type === "button") {
+        html += `
+          <button style="
+            position: absolute;
+            left: ${element.x}px;
+            top: ${element.y}px;
+            width: ${element.width}px;
+            height: ${element.height}px;
+            font-family: ${element.fontFamily};
+            font-size: ${element.fontSize}px;
+            font-weight: ${element.fontWeight};
+            font-style: ${element.fontStyle};
+            color: ${element.color};
+            background-color: ${element.backgroundColor};
+            border-radius: ${element.borderRadius}px;
+            padding: ${element.padding}px;
+            border: none;
+            cursor: pointer;
+          ">
+            ${element.text}
+          </button>
+        `;
+      } else {
+        html += `
+          <div style="
+            position: absolute;
+            left: ${element.x}px;
+            top: ${element.y}px;
+            max-width: ${element.maxWidth}px;
+            font-family: ${element.fontFamily};
+            font-size: ${element.fontSize}px;
+            font-weight: ${element.fontWeight};
+            font-style: ${element.fontStyle};
+            color: ${element.color};
+            background-color: ${element.backgroundColor};
+            border-radius: ${element.borderRadius}px;
+            padding: ${element.padding}px;
+          ">
+            ${element.text}
+          </div>
+        `;
+      }
+    });
+
+    html += `</div>`;
+    return html;
+  }, [elements, backgroundImage]);
+
+  // Add this new function to handle save to library
+  const handleSaveToLibrary = useCallback(() => {
+    const htmlTemplate = generateHtmlTemplate();
+    console.log("HTML Template to save:", htmlTemplate);
+    // Here you would typically make an API call to save the template
+    alert("Template saved to console (check developer tools)");
+  }, [generateHtmlTemplate]);
+
   // const handleImageSelect = (img) => {
   //   const image = new Image();
   //   image.crossOrigin = "anonymous";
@@ -1203,6 +1274,25 @@ const App = () => {
             }}
           >
             🔄 Reset
+          </button>
+
+          <button
+            onClick={handleSaveToLibrary}
+            style={{
+              padding: "8px 16px",
+              background: "linear-gradient(135deg, #ffa502 0%, #ff7f50 100%)",
+              color: "white",
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            💾 Save to Library
           </button>
 
           <button
