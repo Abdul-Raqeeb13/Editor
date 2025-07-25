@@ -29,6 +29,13 @@ const App = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [resizeHandle, setResizeHandle] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [randomImages] = useState([
+    "https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1493612276216-ee3925520721?fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1496309732348-3627b118c9f4?fit=crop&w=800&q=80",
+  ]);
 
   // History management for undo/redo
   const [history, setHistory] = useState([]);
@@ -1131,9 +1138,12 @@ const App = () => {
                 textAlign: "center",
                 cursor: "pointer",
               }}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                console.log("Upload box clicked");
+                setShowModal(true);
+              }}
             >
-              <input
+              {/* <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
@@ -1141,7 +1151,7 @@ const App = () => {
                 style={{
                   display: "none",
                 }}
-              />
+              /> */}
               <div style={{ fontSize: 20, marginBottom: 6 }}>📁</div>
               <div style={{ fontSize: 12, color: "#a4b0be" }}>
                 Click to upload background
@@ -1632,6 +1642,70 @@ const App = () => {
             </div>
           )}
         </div>
+
+        {showModal && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              background: "rgba(0, 0, 0, 0.7)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 9999,
+            }}
+            onClick={() => setShowModal(false)}
+          >
+            <div
+              style={{
+                background: "#1e1e2f",
+                padding: 20,
+                borderRadius: 12,
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                maxWidth: 820,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {randomImages.map((img, index) => (
+                <img
+                  key={index}
+                  src={img}
+                  alt={`bg-${index}`}
+                  onClick={() => {
+                    const image = new Image();
+                    image.crossOrigin = "anonymous";
+                    image.onload = () => {
+                      setBackgroundImage(image);
+                      saveToHistory(elements, image);
+                    };
+                    image.src = img;
+                    setShowModal(false);
+                  }}
+                  style={{
+                    width: 200,
+                    height: 125,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    border: "2px solid transparent",
+                    transition: "0.3s",
+                  }}
+                  onMouseOver={(e) =>
+                    (e.currentTarget.style.border = "2px solid #ff4757")
+                  }
+                  onMouseOut={(e) =>
+                    (e.currentTarget.style.border = "2px solid transparent")
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Main Canvas Area */}
         <div
