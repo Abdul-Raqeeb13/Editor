@@ -1,4 +1,3 @@
-import axios from "axios";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 
 // Dummy HTML template (simulating backend response)
@@ -20,6 +19,9 @@ const adHtmlTemplate = `
 const App = () => {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
+  const colorChangeTimeoutRef = useRef(null); // For debouncing color changes
+  const fontSizeTimeoutRef = useRef(null); // For debouncing font size changes
+  const borderRadiusTimeoutRef = useRef(null); // For debouncing border radius changes
   const [ctx, setCtx] = useState(null);
   const [elements, setElements] = useState([]);
   const [selectedElement, setSelectedElement] = useState(null);
@@ -51,32 +53,34 @@ const App = () => {
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
   const [borderRadius, setBorderRadius] = useState(0);
 
+  // Track if user is actively changing values (to prevent history saves)
+  const [isChangingFontSize, setIsChangingFontSize] = useState(false);
+  const [isChangingBorderRadius, setIsChangingBorderRadius] = useState(false);
+  const [isChangingColor, setIsChangingColor] = useState(false);
+
+  // Mock library data for demonstration
+  const mockLibraryData = [
+    { id: 1, image: "/api/placeholder/200/140", generated_image: null },
+    { id: 2, image: "/api/placeholder/200/140", generated_image: null },
+    { id: 3, image: "/api/placeholder/200/140", generated_image: null },
+  ];
+
   useEffect(() => {
-    const fetchLibraryAssets = async () => {
-      try {
-        const response = await axios.get("http://localhost:8000/api/library", {
-          headers: {
-            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUzNTMxMDAyLCJpYXQiOjE3NTM0NDQ2MDIsImp0aSI6IjRhYzM5YThjY2E1MDQyODI5ZGRiMDEzOThlYzk0MTJmIiwidXNlcl9pZCI6MX0.hjx2PIywUmut16oZkEetj9C9I1Zpbu9d4ScyLLmRN5Q`,
-          },
-        });
-
-        const data = response.data.data;
-
-        console.log("----------------------", data);
-
-        setLibrary(data["library"]?.results || []);
-        setMarketingVisualAssets(
-          data["marketing-visual-assets"]?.results || []
-        );
-        setPersuasiveAdCopywriting(
-          data["persuasive-ad-copywriting"]?.results || []
-        );
-      } catch (error) {
-        console.error("❌ Failed to fetch library assets:", error);
-      }
-    };
-
-    fetchLibraryAssets();
+    // Mock API call - replace with actual API call
+    setLibrary(mockLibraryData);
+    setMarketingVisualAssets(mockLibraryData);
+    setPersuasiveAdCopywriting([
+      {
+        heading: "Summer Sale",
+        body: "Get 50% off on all items",
+        cta: "Shop Now",
+      },
+      {
+        heading: "New Arrivals",
+        body: "Check out our latest collection",
+        cta: "Explore",
+      },
+    ]);
   }, []);
 
   const buttonLabels = [
@@ -103,7 +107,7 @@ const App = () => {
         items = library;
         break;
       case "All":
-        items = [...library, ...marketingVisualAssets]; // or include others if needed
+        items = [...library, ...marketingVisualAssets];
         break;
       default:
         return <p className="px-4 text-sm text-gray-500">Select a section.</p>;
@@ -140,9 +144,9 @@ const App = () => {
         }}
       >
         {items.map((img, idx) => {
-          const src = `http://localhost:8000${
-            img.generated_image || img.image
-          }`;
+          const src = `https://images.unsplash.com/photo-${
+            1500000000000 + idx
+          }?w=200&h=140&fit=crop&crop=center`;
           return (
             <div
               key={img.id || idx}
@@ -172,10 +176,11 @@ const App = () => {
     );
   };
 
-  // Updated history management functions
+  // History management functions
   const saveToHistory = useCallback(
     (newElements, newBackgroundImage = null) => {
       console.log("🔄 saveToHistory called");
+
       const state = {
         elements: JSON.parse(JSON.stringify(newElements)),
         backgroundImage: newBackgroundImage
@@ -185,25 +190,26 @@ const App = () => {
               height: newBackgroundImage.height,
             }
           : null,
+        timestamp: Date.now(),
       };
 
       setHistory((prevHistory) => {
-        // Only save if the new state is different from the current state
-        const currentState = prevHistory[historyIndex];
+        // Remove any history after current index (when making new changes after undo)
+        const newHistory = prevHistory.slice(0, historyIndex + 1);
+
+        // Check if this state is different from the current state
+        const currentState = newHistory[newHistory.length - 1];
         if (
           !currentState ||
           JSON.stringify(currentState.elements) !==
             JSON.stringify(state.elements) ||
-          (!currentState.backgroundImage && state.backgroundImage) ||
-          (currentState.backgroundImage && !state.backgroundImage) ||
-          (currentState.backgroundImage &&
-            state.backgroundImage &&
-            currentState.backgroundImage.src !== state.backgroundImage.src)
+          currentState.backgroundImage?.src !== state.backgroundImage?.src
         ) {
-          const newHistory = [...prevHistory.slice(0, historyIndex + 1), state];
-          return newHistory.slice(-50); // Limit history to 50 states
+          const updatedHistory = [...newHistory, state];
+          // Limit history to 50 states
+          return updatedHistory.slice(-50);
         }
-        return prevHistory;
+        return newHistory;
       });
 
       setHistoryIndex((prevIndex) => {
@@ -214,7 +220,7 @@ const App = () => {
     [historyIndex]
   );
 
-  // Update selected element reference - OPTIMIZED
+  // Update selected element reference
   const updateSelectedElementReference = useCallback(
     (newElements, currentSelectedId) => {
       console.log("🔍 updateSelectedElementReference called");
@@ -240,7 +246,7 @@ const App = () => {
     []
   );
 
-  // Update editor controls - OPTIMIZED
+  // Update editor controls
   const updateEditorControls = useCallback((element) => {
     console.log("⚙️ updateEditorControls called");
     setFontSize(element.fontSize);
@@ -252,7 +258,7 @@ const App = () => {
     setBorderRadius(element.borderRadius);
   }, []);
 
-  // Reset editor controls - OPTIMIZED
+  // Reset editor controls
   const resetEditorControls = useCallback(() => {
     console.log("🔄 resetEditorControls called");
     setFontSize(20);
@@ -264,75 +270,84 @@ const App = () => {
     setBorderRadius(0);
   }, []);
 
-  // Updated undo function
+  // Undo function
   const undo = useCallback(() => {
-    console.log("↶ undo called");
+    console.log("↶ undo called, current historyIndex:", historyIndex);
+
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       const prevState = history[newIndex];
       const currentSelectedId = selectedElement?.id;
 
-      // Create a new image object when undoing background changes
+      console.log("Going to index:", newIndex, "State:", prevState);
+
+      setHistoryIndex(newIndex);
+
+      // Restore elements
+      setElements(prevState.elements);
+
+      // Restore background image
       if (prevState.backgroundImage) {
         const img = new Image();
         img.crossOrigin = "anonymous";
         img.onload = () => {
           setBackgroundImage(img);
-          setElements(prevState.elements);
           updateSelectedElementReference(prevState.elements, currentSelectedId);
-          setHistoryIndex(newIndex);
         };
         img.onerror = () => {
           setBackgroundImage(null);
-          setElements(prevState.elements);
           updateSelectedElementReference(prevState.elements, currentSelectedId);
-          setHistoryIndex(newIndex);
         };
         img.src = prevState.backgroundImage.src;
       } else {
         setBackgroundImage(null);
-        setElements(prevState.elements);
         updateSelectedElementReference(prevState.elements, currentSelectedId);
-        setHistoryIndex(newIndex);
       }
     }
   }, [history, historyIndex, selectedElement, updateSelectedElementReference]);
 
-  // Updated redo function
+  // Redo function
   const redo = useCallback(() => {
-    console.log("↷ redo called");
+    console.log(
+      "↷ redo called, current historyIndex:",
+      historyIndex,
+      "history length:",
+      history.length
+    );
+
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       const nextState = history[newIndex];
       const currentSelectedId = selectedElement?.id;
 
-      // Create a new image object when redoing background changes
+      console.log("Going to index:", newIndex, "State:", nextState);
+
+      setHistoryIndex(newIndex);
+
+      // Restore elements
+      setElements(nextState.elements);
+
+      // Restore background image
       if (nextState.backgroundImage) {
         const img = new Image();
         img.crossOrigin = "anonymous";
         img.onload = () => {
           setBackgroundImage(img);
-          setElements(nextState.elements);
           updateSelectedElementReference(nextState.elements, currentSelectedId);
-          setHistoryIndex(newIndex);
         };
         img.onerror = () => {
           setBackgroundImage(null);
-          setElements(nextState.elements);
           updateSelectedElementReference(nextState.elements, currentSelectedId);
-          setHistoryIndex(newIndex);
         };
         img.src = nextState.backgroundImage.src;
       } else {
         setBackgroundImage(null);
-        setElements(nextState.elements);
         updateSelectedElementReference(nextState.elements, currentSelectedId);
-        setHistoryIndex(newIndex);
       }
     }
   }, [history, historyIndex, selectedElement, updateSelectedElementReference]);
 
-  // Reset to original template - OPTIMIZED
+  // Reset to original template
   const resetTemplate = useCallback(() => {
     console.log("🔄 resetTemplate called");
     if (!originalTemplate) return;
@@ -352,6 +367,11 @@ const App = () => {
     setSelectedElement(null);
     resetEditorControls();
 
+    // Reset history
+    setHistory([]);
+    setHistoryIndex(-1);
+
+    // Save the reset state as the first history entry
     setTimeout(() => {
       saveToHistory(
         originalTemplate.elements,
@@ -366,112 +386,141 @@ const App = () => {
     }, 100);
   }, [originalTemplate, saveToHistory, resetEditorControls]);
 
-  // Parse HTML template - OPTIMIZED
-  const parseTemplate = useCallback(
-    (htmlString) => {
-      console.log("📝 parseTemplate called");
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlString, "text/html");
-      const container = doc.getElementById("ad-template");
+  // Parse HTML template
+  const parseTemplate = useCallback((htmlString) => {
+    console.log("📝 parseTemplate called");
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, "text/html");
+    const container = doc.getElementById("ad-template");
 
-      if (!container) return;
+    if (!container) return;
 
-      const bgStyle = container.style.backgroundImage;
-      const bgUrl = bgStyle?.startsWith("url")
-        ? bgStyle.replace(/^url\(["']?/, "").replace(/["']?\)$/, "")
-        : null;
+    const bgStyle = container.style.backgroundImage;
+    const bgUrl = bgStyle?.startsWith("url")
+      ? bgStyle.replace(/^url\(["']?/, "").replace(/["']?\)$/, "")
+      : null;
 
-      const textElements = container.querySelectorAll(
-        "h1, h2, h3, h4, h5, h6, p, span, div, button"
-      );
-      const parsedElements = [];
+    const textElements = container.querySelectorAll(
+      "h1, h2, h3, h4, h5, h6, p, span, div, button"
+    );
+    const parsedElements = [];
 
-      textElements.forEach((el, index) => {
-        const text = el.textContent.trim();
-        if (!text) return;
+    textElements.forEach((el, index) => {
+      const text = el.textContent.trim();
+      if (!text) return;
 
-        const style = el.style;
-        const tagName = el.tagName.toLowerCase();
+      const style = el.style;
+      const tagName = el.tagName.toLowerCase();
 
-        parsedElements.push({
-          id: `element-${index}`,
-          type: tagName === "button" ? "button" : "text",
-          text,
-          x: parseInt(style.left) || 50,
-          y: parseInt(style.top) || 50 + index * 50,
-          fontSize:
-            parseInt(style.fontSize) ||
-            (tagName === "h1" ? 42 : tagName === "h3" ? 16 : 20),
-          fontFamily: "Arial",
-          fontWeight:
-            style.fontWeight ||
-            (["h1", "h3", "button"].includes(tagName) ? "bold" : "normal"),
-          fontStyle: style.fontStyle || "normal",
-          color: style.color || (tagName === "button" ? "#ffffff" : "#000000"),
-          backgroundColor:
-            tagName === "button"
-              ? style.background || style.backgroundColor || "#7873f5"
-              : style.backgroundColor || "transparent",
-          borderRadius:
-            parseInt(style.borderRadius) || (tagName === "button" ? 8 : 0),
-          padding: tagName === "button" ? 12 : 0,
-          width: tagName === "button" ? 200 : 300,
-          height: tagName === "button" ? 50 : null,
-          maxWidth: 400,
-        });
+      parsedElements.push({
+        id: `element-${index}`,
+        type: tagName === "button" ? "button" : "text",
+        text,
+        x: parseInt(style.left) || 50,
+        y: parseInt(style.top) || 50 + index * 50,
+        fontSize:
+          parseInt(style.fontSize) ||
+          (tagName === "h1" ? 42 : tagName === "h3" ? 16 : 20),
+        fontFamily: "Arial",
+        fontWeight:
+          style.fontWeight ||
+          (["h1", "h3", "button"].includes(tagName) ? "bold" : "normal"),
+        fontStyle: style.fontStyle || "normal",
+        color: style.color || (tagName === "button" ? "#ffffff" : "#000000"),
+        backgroundColor:
+          tagName === "button"
+            ? style.background || style.backgroundColor || "#7873f5"
+            : style.backgroundColor || "transparent",
+        borderRadius:
+          parseInt(style.borderRadius) || (tagName === "button" ? 8 : 0),
+        padding: tagName === "button" ? 12 : 0,
+        width: tagName === "button" ? 200 : 300,
+        height: tagName === "button" ? 50 : null,
+        maxWidth: 400,
       });
+    });
 
-      if (bgUrl) {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
+    if (bgUrl) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
 
-        img.onload = () => {
-          console.log("🖼️ Background image loaded");
-          setBackgroundImage(img);
-          setElements(parsedElements);
+      img.onload = () => {
+        console.log("🖼️ Background image loaded");
+        setBackgroundImage(img);
+        setElements(parsedElements);
 
-          const bgState = {
-            src: img.src,
-            width: img.width,
-            height: img.height,
-          };
-
-          const originalState = {
-            elements: JSON.parse(JSON.stringify(parsedElements)),
-            backgroundImage: bgState,
-          };
-
-          setOriginalTemplate(originalState);
-          saveToHistory(parsedElements, img);
+        const bgState = {
+          src: img.src,
+          width: img.width,
+          height: img.height,
         };
 
-        img.onerror = () => {
-          console.log("❌ Background image failed to load");
-          setBackgroundImage(null);
-          setElements(parsedElements);
-          setOriginalTemplate({
-            elements: JSON.parse(JSON.stringify(parsedElements)),
-            backgroundImage: null,
-          });
-          saveToHistory(parsedElements, null);
+        const originalState = {
+          elements: JSON.parse(JSON.stringify(parsedElements)),
+          backgroundImage: bgState,
         };
 
-        img.src = bgUrl;
-      } else {
+        setOriginalTemplate(originalState);
+
+        // Initialize history with the loaded template
+        const initialState = {
+          elements: JSON.parse(JSON.stringify(parsedElements)),
+          backgroundImage: bgState,
+          timestamp: Date.now(),
+        };
+
+        setHistory([initialState]);
+        setHistoryIndex(0);
+      };
+
+      img.onerror = () => {
+        console.log("❌ Background image failed to load");
         setBackgroundImage(null);
         setElements(parsedElements);
+
         const originalState = {
           elements: JSON.parse(JSON.stringify(parsedElements)),
           backgroundImage: null,
         };
-        setOriginalTemplate(originalState);
-        saveToHistory(parsedElements, null);
-      }
-    },
-    [saveToHistory]
-  );
 
-  // Get resize handles - OPTIMIZED
+        setOriginalTemplate(originalState);
+
+        // Initialize history with the loaded template
+        const initialState = {
+          elements: JSON.parse(JSON.stringify(parsedElements)),
+          backgroundImage: null,
+          timestamp: Date.now(),
+        };
+
+        setHistory([initialState]);
+        setHistoryIndex(0);
+      };
+
+      img.src = bgUrl;
+    } else {
+      setBackgroundImage(null);
+      setElements(parsedElements);
+
+      const originalState = {
+        elements: JSON.parse(JSON.stringify(parsedElements)),
+        backgroundImage: null,
+      };
+
+      setOriginalTemplate(originalState);
+
+      // Initialize history with the loaded template
+      const initialState = {
+        elements: JSON.parse(JSON.stringify(parsedElements)),
+        backgroundImage: null,
+        timestamp: Date.now(),
+      };
+
+      setHistory([initialState]);
+      setHistoryIndex(0);
+    }
+  }, []);
+
+  // Get resize handles
   const getResizeHandles = useCallback((element) => {
     if (!element) return [];
 
@@ -502,7 +551,7 @@ const App = () => {
     return handles;
   }, []);
 
-  // Draw single element - OPTIMIZED
+  // Draw single element
   const drawElement = useCallback(
     (ctx, element, isSelected = false) => {
       console.log(`🎨 drawElement called for ${element.id}`);
@@ -609,7 +658,7 @@ const App = () => {
     [getResizeHandles]
   );
 
-  // Render canvas - OPTIMIZED
+  // Render canvas
   const render = useCallback(() => {
     console.log("🖼️ render called");
     if (!ctx) return;
@@ -629,7 +678,7 @@ const App = () => {
     });
   }, [ctx, elements, selectedElement, backgroundImage, drawElement]);
 
-  // Initialize canvas - OPTIMIZED
+  // Initialize canvas
   useEffect(() => {
     console.log("🎯 Canvas initialization useEffect");
     const canvas = canvasRef.current;
@@ -664,13 +713,13 @@ const App = () => {
     parseTemplate(adHtmlTemplate);
   }, [parseTemplate]);
 
-  // Render when dependencies change - OPTIMIZED
+  // Render when dependencies change
   useEffect(() => {
     console.log("🎨 Render useEffect triggered");
     render();
   }, [render]);
 
-  // Keyboard shortcuts - OPTIMIZED
+  // Keyboard shortcuts
   useEffect(() => {
     console.log("⌨️ Keyboard shortcuts useEffect");
     const handleKeyPress = (e) => {
@@ -692,7 +741,7 @@ const App = () => {
     };
   }, [undo, redo]);
 
-  // FIXED: Background image upload handler
+  // Background image upload handler
   const handleBackgroundImageChange = useCallback(
     (e) => {
       console.log("📁 handleBackgroundImageChange called");
@@ -737,7 +786,7 @@ const App = () => {
     [elements, saveToHistory]
   );
 
-  // Add this new function to generate HTML template
+  // Generate HTML template
   const generateHtmlTemplate = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return "";
@@ -800,7 +849,7 @@ const App = () => {
     return html;
   }, [elements, backgroundImage]);
 
-  // Add this new function to handle save to library
+  // Handle save to library
   const handleSaveToLibrary = useCallback(() => {
     const htmlTemplate = generateHtmlTemplate();
     console.log("HTML Template to save:", htmlTemplate);
@@ -821,7 +870,7 @@ const App = () => {
       saveToHistory(elements, null);
       setShowModal(false);
     };
-    image.src = `http://localhost:8000${img.generated_image || img.image}`;
+    image.src = `https://images.unsplash.com/photo-1500000000000?w=800&h=500&fit=crop&crop=center`;
   };
 
   const getResizeHandleAt = useCallback(
@@ -841,7 +890,7 @@ const App = () => {
     [getResizeHandles]
   );
 
-  // Mouse event handlers - OPTIMIZED
+  // Mouse event handlers
   const handleCanvasMouseDown = useCallback(
     (e) => {
       const canvas = canvasRef.current;
@@ -983,8 +1032,11 @@ const App = () => {
       getResizeHandles,
     ]
   );
+
+  // Save history after drag/resize operations
   const handleCanvasMouseUp = useCallback(() => {
     if (isDragging || isResizing) {
+      // Save to history after completing drag or resize operation
       saveToHistory(elements, backgroundImage);
     }
 
@@ -1014,7 +1066,7 @@ const App = () => {
     [selectedElement, isDragging, isResizing]
   );
 
-  // Update selected element property
+  // OPTIMIZED: Update selected element property - handles different properties differently
   const updateSelectedElement = useCallback(
     (property, value) => {
       console.log(`⚙️ updateSelectedElement: ${property} = ${value}`);
@@ -1028,8 +1080,168 @@ const App = () => {
 
       setElements(newElements);
       setSelectedElement((prev) => ({ ...prev, [property]: value }));
+
+      // For fontSize, borderRadius, and color properties, don't save to history immediately
+      // History will be saved when user releases the control
+      if (
+        !["fontSize", "borderRadius", "color", "backgroundColor"].includes(
+          property
+        )
+      ) {
+        // Save to history for other property changes (debounced)
+        clearTimeout(updateSelectedElement.timeoutId);
+        updateSelectedElement.timeoutId = setTimeout(() => {
+          saveToHistory(newElements, backgroundImage);
+        }, 300);
+      }
     },
-    [selectedElement, elements]
+    [selectedElement, elements, backgroundImage, saveToHistory]
+  );
+
+  // OPTIMIZED: Font size change handlers
+  const handleFontSizeChange = useCallback(
+    (value, isComplete = false) => {
+      console.log(`📏 handleFontSizeChange: ${value}, complete: ${isComplete}`);
+      if (!selectedElement) return;
+
+      const size = parseInt(value);
+
+      // Update the local state immediately for real-time feedback
+      setFontSize(size);
+
+      // Update the element
+      const newElements = elements.map((element) =>
+        element.id === selectedElement.id
+          ? { ...element, fontSize: size }
+          : element
+      );
+
+      setElements(newElements);
+      setSelectedElement((prev) => ({ ...prev, fontSize: size }));
+
+      // Only save to history when the font size selection is complete
+      if (isComplete) {
+        console.log(`💾 Saving font size change to history: ${size}`);
+        saveToHistory(newElements, backgroundImage);
+        setIsChangingFontSize(false);
+      } else {
+        setIsChangingFontSize(true);
+        // Clear any existing timeout to prevent multiple saves
+        if (fontSizeTimeoutRef.current) {
+          clearTimeout(fontSizeTimeoutRef.current);
+        }
+
+        // Set a timeout to save if user stops changing font size for 1 second
+        fontSizeTimeoutRef.current = setTimeout(() => {
+          console.log(
+            `💾 Auto-saving font size change to history after timeout: ${size}`
+          );
+          saveToHistory(newElements, backgroundImage);
+          setIsChangingFontSize(false);
+        }, 1000);
+      }
+    },
+    [selectedElement, elements, backgroundImage, saveToHistory]
+  );
+
+  // OPTIMIZED: Border radius change handlers
+  const handleBorderRadiusChange = useCallback(
+    (value, isComplete = false) => {
+      console.log(
+        `🔄 handleBorderRadiusChange: ${value}, complete: ${isComplete}`
+      );
+      if (!selectedElement) return;
+
+      const radius = parseInt(value);
+
+      // Update the local state immediately for real-time feedback
+      setBorderRadius(radius);
+
+      // Update the element
+      const newElements = elements.map((element) =>
+        element.id === selectedElement.id
+          ? { ...element, borderRadius: radius }
+          : element
+      );
+
+      setElements(newElements);
+      setSelectedElement((prev) => ({ ...prev, borderRadius: radius }));
+
+      // Only save to history when the border radius selection is complete
+      if (isComplete) {
+        console.log(`💾 Saving border radius change to history: ${radius}`);
+        saveToHistory(newElements, backgroundImage);
+        setIsChangingBorderRadius(false);
+      } else {
+        setIsChangingBorderRadius(true);
+        // Clear any existing timeout to prevent multiple saves
+        if (borderRadiusTimeoutRef.current) {
+          clearTimeout(borderRadiusTimeoutRef.current);
+        }
+
+        // Set a timeout to save if user stops changing border radius for 1 second
+        borderRadiusTimeoutRef.current = setTimeout(() => {
+          console.log(
+            `💾 Auto-saving border radius change to history after timeout: ${radius}`
+          );
+          saveToHistory(newElements, backgroundImage);
+          setIsChangingBorderRadius(false);
+        }, 1000);
+      }
+    },
+    [selectedElement, elements, backgroundImage, saveToHistory]
+  );
+
+  // OPTIMIZED: Color change handlers that save to history only when done
+  const handleColorChange = useCallback(
+    (property, value, isComplete = false) => {
+      console.log(
+        `🎨 handleColorChange: ${property} = ${value}, complete: ${isComplete}`
+      );
+      if (!selectedElement) return;
+
+      // Update the local state immediately for real-time feedback
+      if (property === "color") {
+        setTextColor(value);
+      } else if (property === "backgroundColor") {
+        setBackgroundColor(value);
+      }
+
+      // Update the element
+      const newElements = elements.map((element) =>
+        element.id === selectedElement.id
+          ? { ...element, [property]: value }
+          : element
+      );
+
+      setElements(newElements);
+      setSelectedElement((prev) => ({ ...prev, [property]: value }));
+
+      // Only save to history when the color selection is complete
+      if (isComplete) {
+        console.log(
+          `💾 Saving color change to history: ${property} = ${value}`
+        );
+        saveToHistory(newElements, backgroundImage);
+        setIsChangingColor(false);
+      } else {
+        setIsChangingColor(true);
+        // Clear any existing timeout to prevent multiple saves
+        if (colorChangeTimeoutRef.current) {
+          clearTimeout(colorChangeTimeoutRef.current);
+        }
+
+        // Set a timeout to save if user stops changing color for 500ms
+        colorChangeTimeoutRef.current = setTimeout(() => {
+          console.log(
+            `💾 Auto-saving color change to history after timeout: ${property} = ${value}`
+          );
+          saveToHistory(newElements, backgroundImage);
+          setIsChangingColor(false);
+        }, 500);
+      }
+    },
+    [selectedElement, elements, backgroundImage, saveToHistory]
   );
 
   // Add text element
@@ -1114,21 +1326,21 @@ const App = () => {
   const handleTextEdit = useCallback(() => {
     console.log("✏️ handleTextEdit");
     if (selectedElement && editingText.trim()) {
-      updateSelectedElement("text", editingText);
-      setTimeout(() => {
-        saveToHistory(elements, backgroundImage);
-      }, 50);
+      const newElements = elements.map((element) =>
+        element.id === selectedElement.id
+          ? { ...element, text: editingText }
+          : element
+      );
+
+      setElements(newElements);
+      setSelectedElement((prev) => ({ ...prev, text: editingText }));
+
+      // Save to history after text edit
+      saveToHistory(newElements, backgroundImage);
     }
     setIsEditing(false);
     setEditingText("");
-  }, [
-    selectedElement,
-    editingText,
-    updateSelectedElement,
-    elements,
-    backgroundImage,
-    saveToHistory,
-  ]);
+  }, [selectedElement, editingText, elements, backgroundImage, saveToHistory]);
 
   // Export canvas
   const exportCanvas = useCallback(() => {
@@ -1212,7 +1424,7 @@ const App = () => {
               gap: 6,
             }}
           >
-            ↶ Undo
+            ↶ Undo ({historyIndex})
           </button>
 
           <button
@@ -1236,7 +1448,7 @@ const App = () => {
               gap: 6,
             }}
           >
-            ↷ Redo
+            ↷ Redo ({history.length - 1})
           </button>
 
           <button
@@ -1364,15 +1576,6 @@ const App = () => {
                 setShowModal(true);
               }}
             >
-              {/* <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleBackgroundImageChange}
-                style={{
-                  display: "none",
-                }}
-              /> */}
               <div style={{ fontSize: 20, marginBottom: 6 }}>📁</div>
               <div style={{ fontSize: 12, color: "#a4b0be" }}>
                 Click to upload background
@@ -1583,6 +1786,7 @@ const App = () => {
                   marginBottom: 16,
                 }}
               >
+                {/* OPTIMIZED: Font Size Slider */}
                 <div style={{ marginBottom: 12 }}>
                   <label
                     style={{
@@ -1593,18 +1797,23 @@ const App = () => {
                       fontWeight: 600,
                     }}
                   >
-                    FONT SIZE: {fontSize}px
+                    FONT SIZE: {fontSize}px{" "}
+                    {isChangingFontSize && "(changing...)"}
                   </label>
                   <input
                     type="range"
                     min="8"
                     max="72"
                     value={fontSize}
-                    onChange={(e) => {
-                      const size = parseInt(e.target.value);
-                      setFontSize(size);
-                      updateSelectedElement("fontSize", size);
-                    }}
+                    onChange={(e) =>
+                      handleFontSizeChange(e.target.value, false)
+                    }
+                    onMouseUp={(e) =>
+                      handleFontSizeChange(e.target.value, true)
+                    }
+                    onTouchEnd={(e) =>
+                      handleFontSizeChange(e.target.value, true)
+                    }
                     style={{
                       width: "100%",
                       background: "#ff4757",
@@ -1744,6 +1953,7 @@ const App = () => {
                   </div>
                 </div>
 
+                {/* OPTIMIZED: Text Color Picker */}
                 <div style={{ marginBottom: 12 }}>
                   <label
                     style={{
@@ -1754,15 +1964,20 @@ const App = () => {
                       fontWeight: 600,
                     }}
                   >
-                    TEXT COLOR
+                    TEXT COLOR {isChangingColor && "(changing...)"}
                   </label>
                   <input
                     type="color"
                     value={textColor}
-                    onChange={(e) => {
-                      setTextColor(e.target.value);
-                      updateSelectedElement("color", e.target.value);
-                    }}
+                    onChange={(e) =>
+                      handleColorChange("color", e.target.value, false)
+                    }
+                    onBlur={(e) =>
+                      handleColorChange("color", e.target.value, true)
+                    }
+                    onMouseUp={(e) =>
+                      handleColorChange("color", e.target.value, true)
+                    }
                     style={{
                       width: "100%",
                       height: 35,
@@ -1776,6 +1991,7 @@ const App = () => {
 
                 {selectedElement.type === "button" && (
                   <>
+                    {/* OPTIMIZED: Background Color Picker */}
                     <div style={{ marginBottom: 12 }}>
                       <label
                         style={{
@@ -1786,18 +2002,32 @@ const App = () => {
                           fontWeight: 600,
                         }}
                       >
-                        BACKGROUND COLOR
+                        BACKGROUND COLOR {isChangingColor && "(changing...)"}
                       </label>
                       <input
                         type="color"
                         value={backgroundColor}
-                        onChange={(e) => {
-                          setBackgroundColor(e.target.value);
-                          updateSelectedElement(
+                        onChange={(e) =>
+                          handleColorChange(
                             "backgroundColor",
-                            e.target.value
-                          );
-                        }}
+                            e.target.value,
+                            false
+                          )
+                        }
+                        onBlur={(e) =>
+                          handleColorChange(
+                            "backgroundColor",
+                            e.target.value,
+                            true
+                          )
+                        }
+                        onMouseUp={(e) =>
+                          handleColorChange(
+                            "backgroundColor",
+                            e.target.value,
+                            true
+                          )
+                        }
                         style={{
                           width: "100%",
                           height: 35,
@@ -1809,6 +2039,7 @@ const App = () => {
                       />
                     </div>
 
+                    {/* OPTIMIZED: Border Radius Slider */}
                     <div style={{ marginBottom: 12 }}>
                       <label
                         style={{
@@ -1819,18 +2050,23 @@ const App = () => {
                           fontWeight: 600,
                         }}
                       >
-                        BORDER RADIUS: {borderRadius}px
+                        BORDER RADIUS: {borderRadius}px{" "}
+                        {isChangingBorderRadius && "(changing...)"}
                       </label>
                       <input
                         type="range"
                         min="0"
                         max="30"
                         value={borderRadius}
-                        onChange={(e) => {
-                          const radius = parseInt(e.target.value);
-                          setBorderRadius(radius);
-                          updateSelectedElement("borderRadius", radius);
-                        }}
+                        onChange={(e) =>
+                          handleBorderRadiusChange(e.target.value, false)
+                        }
+                        onMouseUp={(e) =>
+                          handleBorderRadiusChange(e.target.value, true)
+                        }
+                        onTouchEnd={(e) =>
+                          handleBorderRadiusChange(e.target.value, true)
+                        }
                         style={{
                           width: "100%",
                           background: "#ff4757",
@@ -1877,7 +2113,7 @@ const App = () => {
               justifyContent: "center",
               alignItems: "center",
               zIndex: 9999,
-              padding: 20, // adds margin from edges
+              padding: 20,
             }}
             onClick={() => setShowModal(false)}
           >
@@ -1888,8 +2124,8 @@ const App = () => {
                 borderRadius: 12,
                 width: "100%",
                 maxWidth: 1000,
-                maxHeight: "90vh", // limits height
-                overflowY: "auto", // makes content scrollable
+                maxHeight: "90vh",
+                overflowY: "auto",
               }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -2003,7 +2239,9 @@ const App = () => {
             >
               💡 <strong style={{ color: "#ffffff" }}>How to use:</strong> Click
               and drag to move elements • Drag red handles to resize •
-              Double-click to edit text • Use Ctrl+Z/Ctrl+Y for undo/redo
+              Double-click to edit text • Use Ctrl+Z/Ctrl+Y for undo/redo •
+              Sliders & color pickers save when you release them or click
+              elsewhere
             </div>
           </div>
         </div>
