@@ -36,12 +36,20 @@ const App = () => {
   const [marketingVisualAssets, setMarketingVisualAssets] = useState([]);
   const [persuasiveAdCopywriting, setPersuasiveAdCopywriting] = useState([]);
   const [activeSection, setActiveSection] = useState("All");
-  // const [randomImages] = useState([
-  //   "https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?fit=crop&w=800&q=80",
-  //   "https://images.unsplash.com/photo-1493612276216-ee3925520721?fit=crop&w=800&q=80",
-  //   "https://images.unsplash.com/photo-1506744038136-46273834b3fb?fit=crop&w=800&q=80",
-  //   "https://images.unsplash.com/photo-1496309732348-3627b118c9f4?fit=crop&w=800&q=80",
-  // ]);
+
+  // History management for undo/redo
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [originalTemplate, setOriginalTemplate] = useState(null);
+
+  // Editor state
+  const [fontSize, setFontSize] = useState(20);
+  const [fontFamily, setFontFamily] = useState("Arial");
+  const [fontWeight, setFontWeight] = useState("normal");
+  const [fontStyle, setFontStyle] = useState("normal");
+  const [textColor, setTextColor] = useState("#000000");
+  const [backgroundColor, setBackgroundColor] = useState("#ffffff");
+  const [borderRadius, setBorderRadius] = useState(0);
 
   useEffect(() => {
     const fetchLibraryAssets = async () => {
@@ -164,21 +172,7 @@ const App = () => {
     );
   };
 
-  // History management for undo/redo
-  const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [originalTemplate, setOriginalTemplate] = useState(null);
-
-  // Editor state
-  const [fontSize, setFontSize] = useState(20);
-  const [fontFamily, setFontFamily] = useState("Arial");
-  const [fontWeight, setFontWeight] = useState("normal");
-  const [fontStyle, setFontStyle] = useState("normal");
-  const [textColor, setTextColor] = useState("#000000");
-  const [backgroundColor, setBackgroundColor] = useState("#ffffff");
-  const [borderRadius, setBorderRadius] = useState(0);
-
-  // Save state to history - OPTIMIZED
+  // Updated history management functions
   const saveToHistory = useCallback(
     (newElements, newBackgroundImage = null) => {
       console.log("🔄 saveToHistory called");
@@ -194,11 +188,28 @@ const App = () => {
       };
 
       setHistory((prevHistory) => {
-        const newHistory = [...prevHistory.slice(0, historyIndex + 1), state];
-        return newHistory.slice(-50);
+        // Only save if the new state is different from the current state
+        const currentState = prevHistory[historyIndex];
+        if (
+          !currentState ||
+          JSON.stringify(currentState.elements) !==
+            JSON.stringify(state.elements) ||
+          (!currentState.backgroundImage && state.backgroundImage) ||
+          (currentState.backgroundImage && !state.backgroundImage) ||
+          (currentState.backgroundImage &&
+            state.backgroundImage &&
+            currentState.backgroundImage.src !== state.backgroundImage.src)
+        ) {
+          const newHistory = [...prevHistory.slice(0, historyIndex + 1), state];
+          return newHistory.slice(-50); // Limit history to 50 states
+        }
+        return prevHistory;
       });
 
-      setHistoryIndex((prevIndex) => Math.min(prevIndex + 1, 49));
+      setHistoryIndex((prevIndex) => {
+        const newIndex = Math.min(prevIndex + 1, 49);
+        return newIndex;
+      });
     },
     [historyIndex]
   );
@@ -253,7 +264,7 @@ const App = () => {
     setBorderRadius(0);
   }, []);
 
-  // Undo functionality - OPTIMIZED
+  // Updated undo function
   const undo = useCallback(() => {
     console.log("↶ undo called");
     if (historyIndex > 0) {
@@ -261,24 +272,33 @@ const App = () => {
       const prevState = history[newIndex];
       const currentSelectedId = selectedElement?.id;
 
-      setElements(prevState.elements);
-
+      // Create a new image object when undoing background changes
       if (prevState.backgroundImage) {
         const img = new Image();
         img.crossOrigin = "anonymous";
-        img.onload = () => setBackgroundImage(img);
-        img.onerror = () => setBackgroundImage(null);
+        img.onload = () => {
+          setBackgroundImage(img);
+          setElements(prevState.elements);
+          updateSelectedElementReference(prevState.elements, currentSelectedId);
+          setHistoryIndex(newIndex);
+        };
+        img.onerror = () => {
+          setBackgroundImage(null);
+          setElements(prevState.elements);
+          updateSelectedElementReference(prevState.elements, currentSelectedId);
+          setHistoryIndex(newIndex);
+        };
         img.src = prevState.backgroundImage.src;
       } else {
         setBackgroundImage(null);
+        setElements(prevState.elements);
+        updateSelectedElementReference(prevState.elements, currentSelectedId);
+        setHistoryIndex(newIndex);
       }
-
-      updateSelectedElementReference(prevState.elements, currentSelectedId);
-      setHistoryIndex(newIndex);
     }
   }, [history, historyIndex, selectedElement, updateSelectedElementReference]);
 
-  // Redo functionality - OPTIMIZED
+  // Updated redo function
   const redo = useCallback(() => {
     console.log("↷ redo called");
     if (historyIndex < history.length - 1) {
@@ -286,20 +306,29 @@ const App = () => {
       const nextState = history[newIndex];
       const currentSelectedId = selectedElement?.id;
 
-      setElements(nextState.elements);
-
+      // Create a new image object when redoing background changes
       if (nextState.backgroundImage) {
         const img = new Image();
         img.crossOrigin = "anonymous";
-        img.onload = () => setBackgroundImage(img);
-        img.onerror = () => setBackgroundImage(null);
+        img.onload = () => {
+          setBackgroundImage(img);
+          setElements(nextState.elements);
+          updateSelectedElementReference(nextState.elements, currentSelectedId);
+          setHistoryIndex(newIndex);
+        };
+        img.onerror = () => {
+          setBackgroundImage(null);
+          setElements(nextState.elements);
+          updateSelectedElementReference(nextState.elements, currentSelectedId);
+          setHistoryIndex(newIndex);
+        };
         img.src = nextState.backgroundImage.src;
       } else {
         setBackgroundImage(null);
+        setElements(nextState.elements);
+        updateSelectedElementReference(nextState.elements, currentSelectedId);
+        setHistoryIndex(newIndex);
       }
-
-      updateSelectedElementReference(nextState.elements, currentSelectedId);
-      setHistoryIndex(newIndex);
     }
   }, [history, historyIndex, selectedElement, updateSelectedElementReference]);
 
@@ -444,13 +473,13 @@ const App = () => {
 
   // Get resize handles - OPTIMIZED
   const getResizeHandles = useCallback((element) => {
-    console.log("📏 getResizeHandles called");
     if (!element) return [];
 
-    const handles = [];
     const handleSize = 8;
+    const handles = [];
 
     if (element.type === "button") {
+      // Bottom-right corner handle for buttons
       handles.push({
         type: "se",
         x: element.x + element.width - handleSize / 2,
@@ -459,10 +488,11 @@ const App = () => {
         height: handleSize,
       });
     } else {
-      const textWidth = Math.min(element.width || 300, element.maxWidth);
+      // Right edge handle for text elements
+      const width = element.width || 300;
       handles.push({
         type: "e",
-        x: element.x + textWidth - handleSize / 2,
+        x: element.x + width - handleSize / 2,
         y: element.y + 10,
         width: handleSize,
         height: handleSize,
@@ -683,13 +713,13 @@ const App = () => {
           console.log("🖼️ New background image loaded successfully");
           setBackgroundImage(img);
           // Save to history after image loads
-          setTimeout(() => {
-            saveToHistory(elements, img);
-          }, 100);
+          saveToHistory(elements, img);
         };
 
         img.onerror = () => {
           console.log("❌ Failed to load new background image");
+          setBackgroundImage(null);
+          saveToHistory(elements, null);
         };
 
         img.src = event.target.result;
@@ -778,24 +808,17 @@ const App = () => {
     alert("Template saved to console (check developer tools)");
   }, [generateHtmlTemplate]);
 
-  // const handleImageSelect = (img) => {
-  //   const image = new Image();
-  //   image.crossOrigin = "anonymous";
-  //   image.onload = () => {
-  //     setBackgroundImage(image); // ← You need to have this function in your component
-  //     saveToHistory(elements, image); // ← You need to have this too if using
-  //     setShowModal(false);
-  //   };
-  //   image.src = `http://localhost:8000${img.generated_image || img.image}`;
-  // };
-
-  // Get resize handle at position
-
   const handleImageSelect = (img) => {
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.onload = () => {
-      setBackgroundImage(image); // <-- This function must exist in your component
+      setBackgroundImage(image);
+      saveToHistory(elements, image);
+      setShowModal(false);
+    };
+    image.onerror = () => {
+      setBackgroundImage(null);
+      saveToHistory(elements, null);
       setShowModal(false);
     };
     image.src = `http://localhost:8000${img.generated_image || img.image}`;
@@ -821,22 +844,28 @@ const App = () => {
   // Mouse event handlers - OPTIMIZED
   const handleCanvasMouseDown = useCallback(
     (e) => {
-      console.log("🖱️ handleCanvasMouseDown");
       const canvas = canvasRef.current;
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
+      // First check for resize handle
       if (selectedElement) {
-        const handle = getResizeHandleAt(x, y, selectedElement);
+        const handles = getResizeHandles(selectedElement);
+        const handle = handles.find(
+          (h) =>
+            x >= h.x && x <= h.x + h.width && y >= h.y && y <= h.y + h.height
+        );
+
         if (handle) {
           setIsResizing(true);
           setResizeHandle(handle);
-          canvas.style.cursor = "nw-resize";
+          canvas.style.cursor = "nwse-resize";
           return;
         }
       }
 
+      // Then check for element selection
       const clickedElement = [...elements].reverse().find((element) => {
         if (element.type === "button") {
           return (
@@ -846,37 +875,31 @@ const App = () => {
             y <= element.y + element.height
           );
         } else {
-          const maxWidth = element.width || 300;
+          const width = element.width || 300;
           const lines = Math.ceil(element.text.split(" ").length / 3);
-          const totalHeight = lines * element.fontSize * 1.2;
-
+          const height = lines * element.fontSize * 1.2;
           return (
             x >= element.x &&
-            x <= element.x + maxWidth &&
+            x <= element.x + width &&
             y >= element.y &&
-            y <= element.y + totalHeight
+            y <= element.y + height
           );
         }
       });
 
       if (clickedElement) {
         setSelectedElement(clickedElement);
-        updateEditorControls(clickedElement);
         setIsDragging(true);
-        setDragOffset({ x: x - clickedElement.x, y: y - clickedElement.y });
+        setDragOffset({
+          x: x - clickedElement.x,
+          y: y - clickedElement.y,
+        });
         canvas.style.cursor = "grabbing";
       } else {
         setSelectedElement(null);
-        resetEditorControls();
       }
     },
-    [
-      elements,
-      selectedElement,
-      getResizeHandleAt,
-      updateEditorControls,
-      resetEditorControls,
-    ]
+    [elements, selectedElement, getResizeHandles]
   );
 
   const handleCanvasMouseMove = useCallback(
@@ -887,43 +910,31 @@ const App = () => {
       const y = e.clientY - rect.top;
 
       if (isResizing && selectedElement && resizeHandle) {
-        console.log("🔄 Resizing element");
+        let newWidth, newHeight;
+
         if (selectedElement.type === "button") {
-          const newWidth = Math.max(50, x - selectedElement.x + 4);
-          const newHeight = Math.max(20, y - selectedElement.y + 4);
-
-          const updatedElement = {
-            ...selectedElement,
-            width: newWidth,
-            height: newHeight,
-          };
-          setSelectedElement(updatedElement);
-
-          setElements((prevElements) =>
-            prevElements.map((element) =>
-              element.id === selectedElement.id
-                ? { ...element, width: newWidth, height: newHeight }
-                : element
-            )
-          );
+          newWidth = Math.max(50, x - selectedElement.x);
+          newHeight = Math.max(20, y - selectedElement.y);
         } else {
-          const newWidth = Math.max(
-            100,
-            Math.min(600, x - selectedElement.x + 4)
-          );
-          const updatedElement = { ...selectedElement, width: newWidth };
-          setSelectedElement(updatedElement);
-
-          setElements((prevElements) =>
-            prevElements.map((element) =>
-              element.id === selectedElement.id
-                ? { ...element, width: newWidth }
-                : element
-            )
-          );
+          newWidth = Math.max(100, Math.min(600, x - selectedElement.x));
         }
+
+        const updatedElement = {
+          ...selectedElement,
+          width: newWidth,
+          ...(selectedElement.type === "button" && { height: newHeight }),
+        };
+
+        // Update elements array
+        setElements((prev) =>
+          prev.map((el) => (el.id === selectedElement.id ? updatedElement : el))
+        );
+
+        // Update selected element reference
+        setSelectedElement(updatedElement);
+
+        canvas.style.cursor = "nwse-resize";
       } else if (isDragging && selectedElement) {
-        console.log("🚚 Dragging element");
         const newX = Math.max(
           0,
           Math.min(800 - (selectedElement.width || 300), x - dragOffset.x)
@@ -934,48 +945,27 @@ const App = () => {
         );
 
         const updatedElement = { ...selectedElement, x: newX, y: newY };
-        setSelectedElement(updatedElement);
 
-        setElements((prevElements) =>
-          prevElements.map((element) =>
-            element.id === selectedElement.id
-              ? { ...element, x: newX, y: newY }
-              : element
-          )
+        setElements((prev) =>
+          prev.map((el) => (el.id === selectedElement.id ? updatedElement : el))
         );
+        setSelectedElement(updatedElement);
       } else {
         let cursor = "default";
 
         if (selectedElement) {
-          const handle = getResizeHandleAt(x, y, selectedElement);
-          if (handle) {
-            cursor = "nw-resize";
+          const handles = getResizeHandles(selectedElement);
+          const overHandle = handles.find(
+            (h) =>
+              x >= h.x && x <= h.x + h.width && y >= h.y && y <= h.y + h.height
+          );
+
+          if (overHandle) {
+            cursor = "nwse-resize";
           } else {
-            const overElement = elements.find((element) => {
-              if (element.id === selectedElement.id) {
-                if (element.type === "button") {
-                  return (
-                    x >= element.x &&
-                    x <= element.x + element.width &&
-                    y >= element.y &&
-                    y <= element.y + element.height
-                  );
-                } else {
-                  const maxWidth = element.width || 300;
-                  const lines = Math.ceil(element.text.split(" ").length / 3);
-                  const totalHeight = lines * element.fontSize * 1.2;
-
-                  return (
-                    x >= element.x &&
-                    x <= element.x + maxWidth &&
-                    y >= element.y &&
-                    y <= element.y + totalHeight
-                  );
-                }
-              }
-              return false;
-            });
-
+            const overElement = elements.find(
+              (el) => el.id === selectedElement.id
+            );
             if (overElement) cursor = "grab";
           }
         }
@@ -990,19 +980,11 @@ const App = () => {
       dragOffset,
       resizeHandle,
       elements,
-      getResizeHandleAt,
+      getResizeHandles,
     ]
   );
-
   const handleCanvasMouseUp = useCallback(() => {
-    console.log("🖱️ handleCanvasMouseUp");
     if (isDragging || isResizing) {
-      const updatedElement = elements.find(
-        (el) => el.id === selectedElement?.id
-      );
-      if (updatedElement) {
-        setSelectedElement(updatedElement);
-      }
       saveToHistory(elements, backgroundImage);
     }
 
@@ -1011,14 +993,14 @@ const App = () => {
     setResizeHandle(null);
 
     const canvas = canvasRef.current;
-    canvas.style.cursor = "default";
+    canvas.style.cursor = selectedElement ? "grab" : "default";
   }, [
     isDragging,
     isResizing,
     elements,
-    selectedElement,
     backgroundImage,
     saveToHistory,
+    selectedElement,
   ]);
 
   const handleCanvasDoubleClick = useCallback(
